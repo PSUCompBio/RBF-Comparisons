@@ -56,6 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
               help="If set, color batch hits by signed distance; otherwise absolute distance.")
 
 
+    p.add_argument("--multi-auto", type=int,
+              help="Auto-pick this many reference triangles for batch mode")
+    p.add_argument("--multi-auto-mode", choices=["uniform","random"], default="uniform",
+              help="How to pick --multi-auto triangles (default: uniform)")
+
+
     return p
 
 def parse_args(argv=None):

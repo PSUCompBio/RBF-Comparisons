@@ -35,10 +35,11 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Meshes\" />
+    <Folder Include="Meshes\Input\" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Meshes\50th_Male.vtu" />
-    <Content Include="Meshes\Skin_morphed.vtu" />
+    <Content Include="Meshes\Input\50th_Male.vtu" />
+    <Content Include="Meshes\Input\Skin_morphed.vtu" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
