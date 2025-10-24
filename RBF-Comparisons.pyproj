@@ -32,6 +32,7 @@
     <Compile Include="rbf_modes.py" />
     <Compile Include="rbf_normals.py" />
     <Compile Include="rbf_raycast.py" />
+    <Compile Include="rbf_runner.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Meshes\" />
