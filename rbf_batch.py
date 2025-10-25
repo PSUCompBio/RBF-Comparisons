@@ -3,7 +3,8 @@ import logging
 import time
 import numpy as np
 from typing import List, Tuple, Dict, Any
-
+import multiprocessing as mp
+import pyvista as pv
 from rbf_raycast import cast_single_normal
 
 def _bbox_diag_from_bounds(bounds: Tuple[float, float, float, float, float, float]) -> float:
@@ -125,48 +126,61 @@ def load_batch_results_npz(path: str) -> Dict[str, Any]:
         "glyph_length": float(z["glyph_length"][0]),
     }
 
-# --- Parallel batch casting ---------------------------------------------------
+
+
+# --- Parallel batch casting (drop-in) ----------------------------------------
+import time
 import logging
 import numpy as np
 import multiprocessing as mp
 import pyvista as pv
 from rbf_raycast import cast_single_normal
 
-# Globals inside worker processes
-_G_REF = None
-_G_MORPH = None
+# Globals inside worker processes (SOURCE first, TARGET second)
+_G_SRC = None
+_G_TGT = None
 
-def _init_pool(ref_path: str, morph_path: str):
-    """Load meshes once per worker process to avoid pickling large VTK objects."""
-    global _G_REF, _G_MORPH
-    ref = pv.read(ref_path).extract_surface().triangulate()
-    ref.compute_normals(cell_normals=True, point_normals=False,
+def _init_pool(source_path: str, target_path: str):
+    """Load meshes once per worker process; compute cell normals on SOURCE."""
+    global _G_SRC, _G_TGT
+    src = pv.read(source_path).extract_surface().triangulate()
+    src.compute_normals(cell_normals=True, point_normals=False,
                         auto_orient_normals=True, inplace=True)
-    morph = pv.read(morph_path).extract_surface().triangulate()
-    _G_REF, _G_MORPH = ref, morph
+    tgt = pv.read(target_path).extract_surface().triangulate()
+    _G_SRC, _G_TGT = src, tgt
 
 def _worker_cast(args):
     """Cast one index using process-local meshes."""
     ci, ray_len_factor, both_directions = args
     try:
+        # Early range check on SOURCE to avoid noisy tracebacks
+        Nc = int(_G_SRC.n_cells)
+        ic = int(ci)
+        if ic < 0 or ic >= Nc:
+            return (ic, None, None, None,
+                    np.array([np.nan, np.nan, np.nan]),
+                    np.array([0.0, 0.0, 1.0]), 0)
+
         dist, hit_pt, hit_cell, center, n, sign_dir = cast_single_normal(
-            _G_REF, _G_MORPH, cell_index=ci,
-            ray_len_factor=ray_len_factor, both_directions=both_directions
+            _G_SRC, _G_TGT,
+            cell_index=ic,
+            ray_len_factor=ray_len_factor,
+            both_directions=both_directions,
         )
-        return (ci, dist, hit_pt, hit_cell, center, n, sign_dir)
+        return (ic, dist, hit_pt, hit_cell, center, n, sign_dir)
     except Exception as e:
         logging.exception(f"Index {ci}: {e}")
-        return (ci, None, None, None, np.array([np.nan, np.nan, np.nan]),
+        return (int(ci), None, None, None,
+                np.array([np.nan, np.nan, np.nan]),
                 np.array([0.0, 0.0, 1.0]), 0)
 
 def _bbox_diag(bounds):
     x0,x1,y0,y1,z0,z1 = bounds
     return float(((x1-x0)**2 + (y1-y0)**2 + (z1-z0)**2) ** 0.5)
 
-
 def run_multi_normals_batch_parallel(
-    ref_path: str,
-    morph_path: str,
+    source_path: str,               # <<< SOURCE file (morph when --cast-from morph)
+    target_path: str,               # <<< TARGET file (ref when --cast-from morph)
     indices,
     ray_len_factor: float,
     both_directions: bool,
@@ -175,12 +189,21 @@ def run_multi_normals_batch_parallel(
     chunksize: int = 64,
     progress_every: int = 100,
 ):
-    ctx = mp.get_context("spawn")  # robust on Windows
+    """
+    Parallel version of the batch ray cast.
+    - SOURCE is the mesh we cast FROM; TARGET is the mesh we intersect.
+    - Each worker loads SOURCE and TARGET once via initializer (Windows-safe).
+    - Returns same-shaped dict as sequential version.
+    """
     n = len(indices)
-    logging.info(f"Spawning {processes or mp.cpu_count()} worker(s); submitting {n} jobs (chunksize={chunksize})")
+    logging.info(f"Spawning {processes or mp.cpu_count()} worker(s); "
+                 f"submitting {n} jobs (chunksize={chunksize})")
+    logging.info(f"[batch-par] SOURCE file: {source_path}")
+    logging.info(f"[batch-par] TARGET file: {target_path}")
 
+    ctx = mp.get_context("spawn")  # robust on Windows
     with ctx.Pool(processes=processes, initializer=_init_pool,
-                  initargs=(ref_path, morph_path)) as pool:
+                  initargs=(source_path, target_path)) as pool:
         jobs = [(int(ci), ray_len_factor, both_directions) for ci in indices]
         it = pool.imap_unordered(_worker_cast, jobs, chunksize)
 
@@ -199,11 +222,11 @@ def run_multi_normals_batch_parallel(
                     f"elapsed={elapsed:6.1f}s  rate={rate:6.1f} r/s  eta={eta:6.1f}s"
                 )
 
-    # Re-load ref once (in parent) just to compute glyph length
-    ref = pv.read(ref_path).extract_surface().triangulate()
-    ref.compute_normals(cell_normals=True, point_normals=False,
+    # Compute glyph length from SOURCE bounds (arrows belong on SOURCE)
+    src = pv.read(source_path).extract_surface().triangulate()
+    src.compute_normals(cell_normals=True, point_normals=False,
                         auto_orient_normals=True, inplace=True)
-    glyph_length = max(1e-9, _bbox_diag(ref.bounds) * float(glyph_length_frac))
+    glyph_length = max(1e-9, _bbox_diag(src.bounds) * float(glyph_length_frac))
 
     centers, normals, distances, signed_values, hits_meta = [], [], [], [], []
     for (ci, dist, hit_pt, hit_cell, center, nvec, sign_dir) in results_list:
@@ -220,7 +243,8 @@ def run_multi_normals_batch_parallel(
             hx, hy, hz = (hit_pt if hit_pt is not None else (np.nan, np.nan, np.nan))
             cx, cy, cz = center
             nx, ny, nz = nvec
-            hits_meta.append((ci, hit_cell, float(dist), signed, sign_dir, cx, cy, cz, nx, ny, nz, hx, hy, hz))
+            hits_meta.append((ci, int(hit_cell), float(dist), signed, int(sign_dir),
+                              cx, cy, cz, nx, ny, nz, hx, hy, hz))
 
     return {
         "centers": np.asarray(centers, float),

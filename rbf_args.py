@@ -120,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=100,
         help="Log progress every N completed rays (default: 100). Applies to parallel and sequential batch."
 )
+    g_batch.add_argument(
+        "--cast-from",
+        choices=["ref","morph"],
+        default="ref",
+        help="Which surface to cast normals from (default: ref). Use 'morph' when morph is denser."
+)
 
 
     # ------------------------------------------------------------------

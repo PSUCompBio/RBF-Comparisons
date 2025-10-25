@@ -4,7 +4,8 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>498eca03-d1b0-4e40-9985-f431145e53cd</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>RBF_Comparisons.py</StartupFile>
+    <StartupFile>
+    </StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -27,7 +28,6 @@
     <Compile Include="rbf_distance.py" />
     <Compile Include="rbf_io.py" />
     <Compile Include="rbf_logging.py" />
-    <Compile Include="RBF_Comparisons.py" />
     <Compile Include="rbf_markers.py" />
     <Compile Include="rbf_modes.py" />
     <Compile Include="rbf_normals.py" />
@@ -41,6 +41,7 @@
   <ItemGroup>
     <Content Include="Meshes\Input\50th_Male.vtu" />
     <Content Include="Meshes\Input\Skin_morphed.vtu" />
+    <Content Include="README.md" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
