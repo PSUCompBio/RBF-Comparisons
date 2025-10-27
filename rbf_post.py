@@ -212,15 +212,47 @@ def save_styled_screenshot(
 def save_histogram(distances: np.ndarray, out_png: str, bins: int = 60, title: str = "Distance Histogram"):
     d = np.asarray(distances, dtype=float)
     d = d[np.isfinite(d)]
-    plt.figure()
-    plt.hist(d, bins=bins)
-    plt.xlabel("Distance")
-    plt.ylabel("Count")
-    plt.title(title)
+    if d.size == 0:
+        logging.warning("No valid distances to plot histogram.")
+        return out_png
+
+    # Compute robust limits
+    d_min = np.min(d)
+    d_max = np.max(d)
+    p_low, p_high = np.percentile(d, [0.5, 99.5])  # exclude extreme outliers
+
+    # Define x-axis bounds: limit to ±50 mm or to the 99.5 percentile, whichever is smaller
+    if np.all(d >= 0):  # absolute distances only
+        xlim_min = 0.0
+        xlim_max = min(float(np.ceil(p_high * 1.05)), 60.0)
+    else:  # signed distances
+        xlim_min = max(float(np.floor(p_low * 1.05)), -70.0)
+        xlim_max = min(float(np.ceil(p_high * 1.05)), 70.0)
+
+    plt.figure(figsize=(7, 5))
+    plt.hist(d, bins=bins, color="#4A90E2", edgecolor="black", alpha=0.75)
+    plt.xlabel("Distance [mm]", fontsize=12)
+    plt.ylabel("Triangle Count", fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.xlim(xlim_min, xlim_max)
     plt.grid(True, alpha=0.3)
+
+    # Add simple text box with summary stats
+    mean = np.mean(d)
+    std = np.std(d)
+    plt.text(
+        0.98, 0.95,
+        f"Mean: {mean:.2f} mm\nStd: {std:.2f} mm",
+        transform=plt.gca().transAxes,
+        ha="right", va="top",
+        fontsize=10,
+        bbox=dict(facecolor="white", alpha=0.7, edgecolor="gray", boxstyle="round,pad=0.3")
+    )
+
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
     plt.close()
+    logging.info(f"Wrote histogram plot: {out_png}")
     return out_png
 
 

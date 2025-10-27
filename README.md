@@ -185,6 +185,10 @@ python rbf_cli.py \
 
 This instantly regenerates the colored morph file using previously computed distances.
 
+For creating the morphed plot from cached data and making plots use this:
+python .\rbf_post_cli.py --ref Meshes\Input\50th_Male.vtu --target Meshes\Input\Skin_morphed.vtu --load-batch Meshes\output_batch_0p8pct_cache.npz --cast-from auto --use-signed --export-morph-colored Meshes\output_morph_signed_from_cache.vtp --screenshot Meshes\output_morph_signed_from_cache.png --bg black --cmap coolwarm --scalarbar-title "Signed Distance (mm)" --plots-prefix Meshes\output_signed --bins 60 --verbose
+
+
 ---
 
 ## 🧠 Methodology Summary
