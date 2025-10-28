@@ -52,6 +52,15 @@ def parse_args():
     p.add_argument("--plots-prefix", help="Prefix for analysis plots (will produce _hist.png, _cdf.png, _box.png)")
     p.add_argument("--bins", type=int, default=60, help="Histogram bins")
 
+    p.add_argument("--hist-xmin", type=float, help="Histogram x-axis min [mm]")
+    p.add_argument("--hist-xmax", type=float, help="Histogram x-axis max [mm]")
+    p.add_argument("--hist-percentile", type=float, default=99.5,
+                   help="Histogram/CDF percentile cap (e.g., 99, 99.5). Ignored if x-lims are given.")
+    p.add_argument("--cdf-xmin", type=float, help="CDF x-axis min [mm]")
+    p.add_argument("--cdf-xmax", type=float, help="CDF x-axis max [mm]")
+
+
+
     p.add_argument("--verbose", action="store_true")
     return p.parse_args()
 
@@ -121,12 +130,31 @@ def main():
         cdf_png  = f"{args.plots_prefix}_cdf.png"
         box_png  = f"{args.plots_prefix}_box.png"
 
-        save_histogram(d, hist_png, bins=args.bins,
-                       title=("Signed Distance Histogram" if args.use_signed else "Absolute Distance Histogram"))
-        save_cdf(d, cdf_png,
-                 title=("Signed Distance CDF" if args.use_signed else "Absolute Distance CDF"))
-        save_boxplot(d, box_png,
-                     title=("Signed Distance Boxplot" if args.use_signed else "Absolute Distance Boxplot"))
+        hist_xlim = None
+        if args.hist_xmin is not None and args.hist_xmax is not None:
+            hist_xlim = (args.hist_xmin, args.hist_xmax)
+
+        cdf_xlim = None
+        if args.cdf_xmin is not None and args.cdf_xmax is not None:
+            cdf_xlim = (args.cdf_xmin, args.cdf_xmax)
+
+        save_histogram(
+            d, hist_png, bins=args.bins,
+            title=("Signed Distance Histogram" if args.use_signed else "Absolute Distance Histogram"),
+            xlim=hist_xlim,
+            percentile=args.hist_percentile,
+        )
+        save_cdf(
+            d, cdf_png,
+            title=("Signed Distance CDF" if args.use_signed else "Absolute Distance CDF"),
+            xlim=cdf_xlim,
+            percentile=args.hist_percentile,
+        )
+        save_boxplot(
+            d, box_png,
+            title=("Signed Distance Boxplot" if args.use_signed else "Absolute Distance Boxplot"),
+        )
+
 
         stats = summarize_distances(d)
         logging.info(f"Summary: n={stats['count']}  mean={stats['mean']:.3f}  std={stats['std']:.3f}  "

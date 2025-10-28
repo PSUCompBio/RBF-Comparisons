@@ -209,43 +209,46 @@ def save_styled_screenshot(
 # Analysis plots
 # --------------------------
 
-def save_histogram(distances: np.ndarray, out_png: str, bins: int = 60, title: str = "Distance Histogram"):
+def save_histogram(
+    distances: np.ndarray,
+    out_png: str,
+    bins: int = 60,
+    title: str = "Distance Histogram",
+    xlim: tuple[float, float] | None = None,
+    percentile: float = 99.5,   # robust trim (ignored if xlim is provided)
+):
     d = np.asarray(distances, dtype=float)
     d = d[np.isfinite(d)]
     if d.size == 0:
         logging.warning("No valid distances to plot histogram.")
         return out_png
 
-    # Compute robust limits
-    d_min = np.min(d)
-    d_max = np.max(d)
-    p_low, p_high = np.percentile(d, [0.5, 99.5])  # exclude extreme outliers
-
-    # Define x-axis bounds: limit to ±50 mm or to the 99.5 percentile, whichever is smaller
-    if np.all(d >= 0):  # absolute distances only
-        xlim_min = 0.0
-        xlim_max = min(float(np.ceil(p_high * 1.05)), 60.0)
-    else:  # signed distances
-        xlim_min = max(float(np.floor(p_low * 1.05)), -70.0)
-        xlim_max = min(float(np.ceil(p_high * 1.05)), 70.0)
+    if xlim is None:
+        p_low, p_high = np.percentile(d, [100 - percentile, percentile])
+        if np.all(d >= 0):
+            xmin = 0.0
+            xmax = float(np.ceil(p_high * 1.05))
+        else:
+            xmin = float(np.floor(p_low * 1.05))
+            xmax = float(np.ceil(p_high * 1.05))
+        # hard guardrails (can be relaxed as you like)
+        xmin = max(xmin, -50.0)
+        xmax = min(xmax,  50.0)
+    else:
+        xmin, xmax = xlim
 
     plt.figure(figsize=(7, 5))
-    plt.hist(d, bins=bins, color="#4A90E2", edgecolor="black", alpha=0.75)
+    plt.hist(d, bins=bins, edgecolor="black", alpha=0.75)
     plt.xlabel("Distance [mm]", fontsize=12)
     plt.ylabel("Triangle Count", fontsize=12)
     plt.title(title, fontsize=14)
-    plt.xlim(xlim_min, xlim_max)
+    plt.xlim(xmin, xmax)
     plt.grid(True, alpha=0.3)
 
-    # Add simple text box with summary stats
-    mean = np.mean(d)
-    std = np.std(d)
+    mean = np.mean(d); std = np.std(d)
     plt.text(
-        0.98, 0.95,
-        f"Mean: {mean:.2f} mm\nStd: {std:.2f} mm",
-        transform=plt.gca().transAxes,
-        ha="right", va="top",
-        fontsize=10,
+        0.98, 0.95, f"Mean: {mean:.2f} mm\nStd: {std:.2f} mm",
+        transform=plt.gca().transAxes, ha="right", va="top", fontsize=10,
         bbox=dict(facecolor="white", alpha=0.7, edgecolor="gray", boxstyle="round,pad=0.3")
     )
 
@@ -256,22 +259,44 @@ def save_histogram(distances: np.ndarray, out_png: str, bins: int = 60, title: s
     return out_png
 
 
-def save_cdf(distances: np.ndarray, out_png: str, title: str = "Distance CDF"):
+def save_cdf(
+    distances: np.ndarray,
+    out_png: str,
+    title: str = "Distance CDF",
+    xlim: tuple[float, float] | None = None,
+    percentile: float = 99.5,
+):
     d = np.asarray(distances, dtype=float)
     d = d[np.isfinite(d)]
     if d.size == 0:
         d = np.array([0.0])
     d_sorted = np.sort(d)
     y = np.linspace(0, 1, len(d_sorted), endpoint=True)
-    plt.figure()
+
+    if xlim is None:
+        p_low, p_high = np.percentile(d, [100 - percentile, percentile])
+        if np.all(d >= 0):
+            xmin = 0.0
+            xmax = float(np.ceil(p_high * 1.05))
+        else:
+            xmin = float(np.floor(p_low * 1.05))
+            xmax = float(np.ceil(p_high * 1.05))
+        xmin = max(xmin, -50.0)
+        xmax = min(xmax,  50.0)
+    else:
+        xmin, xmax = xlim
+
+    plt.figure(figsize=(7, 5))
     plt.plot(d_sorted, y)
-    plt.xlabel("Distance")
-    plt.ylabel("Cumulative probability")
-    plt.title(title)
+    plt.xlabel("Distance [mm]", fontsize=12)
+    plt.ylabel("Cumulative Probability", fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.xlim(xmin, xmax)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
     plt.close()
+    logging.info(f"Wrote CDF plot: {out_png}")
     return out_png
 
 
